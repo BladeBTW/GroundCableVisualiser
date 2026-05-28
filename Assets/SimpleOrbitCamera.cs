@@ -1,5 +1,4 @@
 using UnityEngine;
-using UnityEngine.EventSystems;
 using UnityEngine.InputSystem;
 
 public class SimpleOrbitCamera : MonoBehaviour
@@ -12,10 +11,13 @@ public class SimpleOrbitCamera : MonoBehaviour
     public float minDistance = 4f;
     public float maxDistance = 30f;
     public float rotationSpeed = 0.18f;
-    public float zoomSpeed = 0.02f;
 
-    [Header("Move")]
-    public float moveSpeed = 6f;
+    [Header("Zoom")]
+    public float keyboardZoomSpeed = 8f;
+    public float mouseWheelZoomSpeed = 0.02f;
+
+    [Header("Pan")]
+    public float panSpeed = 6f;
     public float fastMoveMultiplier = 2.5f;
 
     [Header("Angles")]
@@ -24,27 +26,43 @@ public class SimpleOrbitCamera : MonoBehaviour
     public float minPitch = 10f;
     public float maxPitch = 80f;
 
+    [Header("Reset Defaults")]
+    public float defaultDistance = 12f;
+    public float defaultYaw = 45f;
+    public float defaultPitch = 30f;
+    public Vector3 defaultTargetPosition = new Vector3(0f, 0.8f, 0f);
+
     private Vector3 targetPosition;
 
     private void Start()
     {
-        if (target != null)
-        {
-            targetPosition = target.position;
-        }
-        else
-        {
-            targetPosition = Vector3.zero;
-        }
-
-        UpdateCameraPosition();
+        ResetCamera();
     }
 
     private void Update()
     {
         HandleRotation();
-        HandleMovement();
-        HandleZoom();
+        HandleKeyboardControls();
+        HandleMouseWheelZoom();
+        UpdateCameraPosition();
+    }
+
+    public void ResetCamera()
+    {
+        distance = defaultDistance;
+        yaw = defaultYaw;
+        pitch = defaultPitch;
+
+        if (target != null)
+        {
+            target.position = defaultTargetPosition;
+            targetPosition = target.position;
+        }
+        else
+        {
+            targetPosition = defaultTargetPosition;
+        }
+
         UpdateCameraPosition();
     }
 
@@ -57,18 +75,24 @@ public class SimpleOrbitCamera : MonoBehaviour
             return;
         }
 
-        if (mouse.rightButton.isPressed)
+        bool shouldRotate =
+            mouse.leftButton.isPressed ||
+            mouse.rightButton.isPressed;
+
+        if (!shouldRotate)
         {
-            Vector2 mouseDelta = mouse.delta.ReadValue();
-
-            yaw += mouseDelta.x * rotationSpeed;
-            pitch -= mouseDelta.y * rotationSpeed;
-
-            pitch = Mathf.Clamp(pitch, minPitch, maxPitch);
+            return;
         }
+
+        Vector2 mouseDelta = mouse.delta.ReadValue();
+
+        yaw += mouseDelta.x * rotationSpeed;
+        pitch -= mouseDelta.y * rotationSpeed;
+
+        pitch = Mathf.Clamp(pitch, minPitch, maxPitch);
     }
 
-    private void HandleMovement()
+    private void HandleKeyboardControls()
     {
         Keyboard keyboard = Keyboard.current;
 
@@ -77,52 +101,71 @@ public class SimpleOrbitCamera : MonoBehaviour
             return;
         }
 
-        float horizontal = 0f;
-        float vertical = 0f;
+        float speedMultiplier = 1f;
+
+        if (keyboard.leftShiftKey.isPressed || keyboard.rightShiftKey.isPressed)
+        {
+            speedMultiplier = fastMoveMultiplier;
+        }
+
+        HandleKeyboardZoom(keyboard, speedMultiplier);
+        HandleKeyboardPan(keyboard, speedMultiplier);
+    }
+
+    private void HandleKeyboardZoom(Keyboard keyboard, float speedMultiplier)
+    {
+        float zoomDirection = 0f;
 
         if (keyboard.wKey.isPressed || keyboard.upArrowKey.isPressed)
         {
-            vertical += 1f;
+            zoomDirection -= 1f;
         }
 
         if (keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed)
         {
-            vertical -= 1f;
+            zoomDirection += 1f;
+        }
+
+        if (Mathf.Abs(zoomDirection) < 0.01f)
+        {
+            return;
+        }
+
+        distance += zoomDirection * keyboardZoomSpeed * speedMultiplier * Time.deltaTime;
+        distance = Mathf.Clamp(distance, minDistance, maxDistance);
+    }
+
+    private void HandleKeyboardPan(Keyboard keyboard, float speedMultiplier)
+    {
+        float panDirection = 0f;
+
+        if (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed)
+        {
+            panDirection -= 1f;
         }
 
         if (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed)
         {
-            horizontal += 1f;
+            panDirection += 1f;
         }
 
-        if (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed)
+        if (Mathf.Abs(panDirection) < 0.01f)
         {
-            horizontal -= 1f;
-        }
-
-        float currentMoveSpeed = moveSpeed;
-
-        if (keyboard.leftShiftKey.isPressed || keyboard.rightShiftKey.isPressed)
-        {
-            currentMoveSpeed *= fastMoveMultiplier;
+            return;
         }
 
         Quaternion flatRotation = Quaternion.Euler(0f, yaw, 0f);
-
-        Vector3 forward = flatRotation * Vector3.forward;
         Vector3 right = flatRotation * Vector3.right;
 
-        Vector3 moveDirection = forward * vertical + right * horizontal;
+        targetPosition += right * panDirection * panSpeed * speedMultiplier * Time.deltaTime;
 
-        if (moveDirection.sqrMagnitude > 1f)
+        if (target != null)
         {
-            moveDirection.Normalize();
+            target.position = targetPosition;
         }
-
-        targetPosition += moveDirection * currentMoveSpeed * Time.deltaTime;
     }
 
-    private void HandleZoom()
+    private void HandleMouseWheelZoom()
     {
         Mouse mouse = Mouse.current;
 
@@ -133,11 +176,13 @@ public class SimpleOrbitCamera : MonoBehaviour
 
         float scrollValue = mouse.scroll.ReadValue().y;
 
-        if (Mathf.Abs(scrollValue) > 0.01f)
+        if (Mathf.Abs(scrollValue) < 0.01f)
         {
-            distance -= scrollValue * zoomSpeed;
-            distance = Mathf.Clamp(distance, minDistance, maxDistance);
+            return;
         }
+
+        distance -= scrollValue * mouseWheelZoomSpeed;
+        distance = Mathf.Clamp(distance, minDistance, maxDistance);
     }
 
     private void UpdateCameraPosition()
