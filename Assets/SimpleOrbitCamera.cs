@@ -8,8 +8,8 @@ public class SimpleOrbitCamera : MonoBehaviour
 
     [Header("Orbit")]
     public float distance = 12f;
-    public float minDistance = 4f;
-    public float maxDistance = 30f;
+    public float minDistance = 1f;
+    public float maxDistance = 50f;
     public float rotationSpeed = 0.18f;
 
     [Header("Zoom")]
@@ -18,25 +18,55 @@ public class SimpleOrbitCamera : MonoBehaviour
 
     [Header("Pan")]
     public float panSpeed = 6f;
+    public float mousePanSpeed = 0.03f;
     public float fastMoveMultiplier = 2.5f;
 
     [Header("Angles")]
     public float yaw = 45f;
     public float pitch = 30f;
-    public float minPitch = 10f;
-    public float maxPitch = 80f;
+    public float minPitch = -89f;
+    public float maxPitch = 89f;
 
     [Header("Reset Defaults")]
     public float defaultDistance = 12f;
     public float defaultYaw = 45f;
     public float defaultPitch = 30f;
+
+    [Tooltip("If enabled, the camera uses the current CameraTarget position in the scene as its reset/start position.")]
+    public bool useCurrentTargetPositionAsDefault = true;
+
     public Vector3 defaultTargetPosition = new Vector3(0f, 0.8f, 0f);
 
     private Vector3 targetPosition;
+    private Vector3 runtimeDefaultTargetPosition;
 
     private void Start()
     {
-        ResetCamera();
+        if (target != null)
+        {
+            targetPosition = target.position;
+
+            if (useCurrentTargetPositionAsDefault)
+            {
+                runtimeDefaultTargetPosition = target.position;
+            }
+            else
+            {
+                runtimeDefaultTargetPosition = defaultTargetPosition;
+                target.position = runtimeDefaultTargetPosition;
+                targetPosition = runtimeDefaultTargetPosition;
+            }
+        }
+        else
+        {
+            runtimeDefaultTargetPosition = defaultTargetPosition;
+            targetPosition = runtimeDefaultTargetPosition;
+        }
+
+        distance = Mathf.Clamp(distance, minDistance, maxDistance);
+        pitch = Mathf.Clamp(pitch, minPitch, maxPitch);
+
+        UpdateCameraPosition();
     }
 
     private void Update()
@@ -44,6 +74,7 @@ public class SimpleOrbitCamera : MonoBehaviour
         HandleRotation();
         HandleKeyboardControls();
         HandleMouseWheelZoom();
+        HandleMiddleMousePan();
         UpdateCameraPosition();
     }
 
@@ -53,14 +84,11 @@ public class SimpleOrbitCamera : MonoBehaviour
         yaw = defaultYaw;
         pitch = defaultPitch;
 
+        targetPosition = runtimeDefaultTargetPosition;
+
         if (target != null)
         {
-            target.position = defaultTargetPosition;
-            targetPosition = target.position;
-        }
-        else
-        {
-            targetPosition = defaultTargetPosition;
+            target.position = targetPosition;
         }
 
         UpdateCameraPosition();
@@ -137,27 +165,54 @@ public class SimpleOrbitCamera : MonoBehaviour
 
     private void HandleKeyboardPan(Keyboard keyboard, float speedMultiplier)
     {
-        float panDirection = 0f;
-
-        if (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed)
-        {
-            panDirection -= 1f;
-        }
-
-        if (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed)
-        {
-            panDirection += 1f;
-        }
-
-        if (Mathf.Abs(panDirection) < 0.01f)
-        {
-            return;
-        }
+        Vector3 panDirection = Vector3.zero;
 
         Quaternion flatRotation = Quaternion.Euler(0f, yaw, 0f);
         Vector3 right = flatRotation * Vector3.right;
 
-        targetPosition += right * panDirection * panSpeed * speedMultiplier * Time.deltaTime;
+        if (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed)
+        {
+            panDirection -= right;
+        }
+
+        if (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed)
+        {
+            panDirection += right;
+        }
+
+        if (panDirection.sqrMagnitude < 0.001f)
+        {
+            return;
+        }
+
+        targetPosition += panDirection.normalized * panSpeed * speedMultiplier * Time.deltaTime;
+
+        if (target != null)
+        {
+            target.position = targetPosition;
+        }
+    }
+
+    private void HandleMiddleMousePan()
+    {
+        Mouse mouse = Mouse.current;
+
+        if (mouse == null || !mouse.middleButton.isPressed)
+        {
+            return;
+        }
+
+        Vector2 mouseDelta = mouse.delta.ReadValue();
+
+        Quaternion cameraRotation = Quaternion.Euler(pitch, yaw, 0f);
+        Vector3 right = cameraRotation * Vector3.right;
+        Vector3 up = cameraRotation * Vector3.up;
+
+        Vector3 panMove =
+            (-right * mouseDelta.x) +
+            (-up * mouseDelta.y);
+
+        targetPosition += panMove * mousePanSpeed;
 
         if (target != null)
         {
@@ -187,6 +242,11 @@ public class SimpleOrbitCamera : MonoBehaviour
 
     private void UpdateCameraPosition()
     {
+        if (target != null)
+        {
+            targetPosition = target.position;
+        }
+
         Quaternion rotation = Quaternion.Euler(pitch, yaw, 0f);
 
         Vector3 cameraDirection = rotation * Vector3.back;

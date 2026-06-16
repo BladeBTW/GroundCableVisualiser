@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 
+[ExecuteAlways]
 public class LayerPanelCollapseController : MonoBehaviour
 {
     [Header("Main Panel")]
@@ -9,21 +10,10 @@ public class LayerPanelCollapseController : MonoBehaviour
 
     [Header("Panel Widths")]
     public float expandedWidth = 300f;
-    public float collapsedWidth = 92f;
+    public float collapsedWidth = 120f;
 
     [Header("Collapse Button")]
     public Button collapseButton;
-    public RectTransform collapseButtonRect;
-
-    [Header("Collapse Button Position")]
-    public Vector2 expandedCollapseButtonPosition = new Vector2(-36f, -40f);
-    public Vector2 collapsedCollapseButtonPosition = new Vector2(0f, -40f);
-    public Vector2 collapseButtonSize = new Vector2(60f, 60f);
-
-    [Header("Optional Collapse Icon")]
-    public Image collapseButtonImage;
-    public Sprite expandedIcon;
-    public Sprite collapsedIcon;
 
     [Header("Texts To Hide When Collapsed")]
     public TMP_Text[] textObjectsToHide;
@@ -58,6 +48,7 @@ public class LayerPanelCollapseController : MonoBehaviour
     [Header("State")]
     public bool startCollapsed = false;
 
+    [SerializeField]
     private bool isCollapsed;
 
     private void Awake()
@@ -66,17 +57,17 @@ public class LayerPanelCollapseController : MonoBehaviour
         {
             panelRect = GetComponent<RectTransform>();
         }
-
-        if (collapseButton != null && collapseButtonRect == null)
-        {
-            collapseButtonRect = collapseButton.GetComponent<RectTransform>();
-        }
-
-        PreparePanelRect();
     }
 
     private void Start()
     {
+        if (!Application.isPlaying)
+        {
+            return;
+        }
+
+        isCollapsed = startCollapsed;
+
         if (collapseButton != null)
         {
             collapseButton.onClick.RemoveAllListeners();
@@ -84,18 +75,23 @@ public class LayerPanelCollapseController : MonoBehaviour
         }
         else
         {
-            Debug.LogError("Collapse Button is NOT assigned.");
+            Debug.LogError("Collapse Button is not assigned.");
         }
 
-        isCollapsed = startCollapsed;
         ApplyState();
     }
 
-    private void Update()
+    private void OnValidate()
     {
-        if (Input.GetKeyDown(KeyCode.C))
+        if (panelRect == null)
         {
-            TogglePanel();
+            panelRect = GetComponent<RectTransform>();
+        }
+
+        if (!Application.isPlaying)
+        {
+            isCollapsed = startCollapsed;
+            ApplyState();
         }
     }
 
@@ -125,30 +121,11 @@ public class LayerPanelCollapseController : MonoBehaviour
         SetLayerButtonWidths();
         SetIconPositions();
         SetResetButtonWidths();
-        SetCollapseButtonPosition();
-        SetCollapseIcon();
 
         if (panelRect != null)
         {
             LayoutRebuilder.ForceRebuildLayoutImmediate(panelRect);
         }
-    }
-
-    private void PreparePanelRect()
-    {
-        if (panelRect == null)
-        {
-            return;
-        }
-
-        panelRect.anchorMin = new Vector2(0f, 0f);
-        panelRect.anchorMax = new Vector2(0f, 1f);
-        panelRect.pivot = new Vector2(0f, 0.5f);
-
-        float width = startCollapsed ? collapsedWidth : expandedWidth;
-
-        panelRect.offsetMin = new Vector2(0f, panelRect.offsetMin.y);
-        panelRect.offsetMax = new Vector2(width, panelRect.offsetMax.y);
     }
 
     private void SetPanelWidth()
@@ -166,32 +143,6 @@ public class LayerPanelCollapseController : MonoBehaviour
 
         panelRect.offsetMin = new Vector2(0f, panelRect.offsetMin.y);
         panelRect.offsetMax = new Vector2(width, panelRect.offsetMax.y);
-    }
-
-    private void SetCollapseButtonPosition()
-    {
-        if (collapseButtonRect == null)
-        {
-            return;
-        }
-
-        if (isCollapsed)
-        {
-            collapseButtonRect.anchorMin = new Vector2(0.5f, 1f);
-            collapseButtonRect.anchorMax = new Vector2(0.5f, 1f);
-            collapseButtonRect.pivot = new Vector2(0.5f, 0.5f);
-            collapseButtonRect.anchoredPosition = collapsedCollapseButtonPosition;
-        }
-        else
-        {
-            collapseButtonRect.anchorMin = new Vector2(1f, 1f);
-            collapseButtonRect.anchorMax = new Vector2(1f, 1f);
-            collapseButtonRect.pivot = new Vector2(0.5f, 0.5f);
-            collapseButtonRect.anchoredPosition = expandedCollapseButtonPosition;
-        }
-
-        collapseButtonRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Horizontal, collapseButtonSize.x);
-        collapseButtonRect.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, collapseButtonSize.y);
     }
 
     private void SetTextVisibility()
@@ -267,25 +218,6 @@ public class LayerPanelCollapseController : MonoBehaviour
                 );
             }
         }
-    }
-
-    private void SetCollapseIcon()
-    {
-        if (collapseButtonImage == null)
-        {
-            return;
-        }
-
-        if (isCollapsed && collapsedIcon != null)
-        {
-            collapseButtonImage.sprite = collapsedIcon;
-        }
-        else if (!isCollapsed && expandedIcon != null)
-        {
-            collapseButtonImage.sprite = expandedIcon;
-        }
-
-        collapseButtonImage.preserveAspect = true;
     }
 
     private void SetHorizontalOffsets(RectTransform rectTransform, float left, float right)
